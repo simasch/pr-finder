@@ -186,8 +186,8 @@ handle_merge() {
   if [[ "$mergeable" == "MERGEABLE" ]]; then
     echo -e "  ${GREEN}✓ This PR can be merged${RESET} (status: ${merge_state})"
     echo ""
-    read -r -p "  Merge this PR? [y/N] " answer </dev/tty
-    if [[ "$answer" =~ ^[Yy]$ ]]; then
+    read -r -p "  Merge this PR? [Y/n] " answer </dev/tty
+    if [[ ! "$answer" =~ ^[Nn]$ ]]; then
       echo ""
       gh pr merge "$url" || {
         echo -e "  ${YELLOW}Merge failed. Open in browser to resolve.${RESET}" >&2
@@ -198,8 +198,8 @@ handle_merge() {
   elif [[ "$mergeable" == "CONFLICTING" ]]; then
     echo -e "  ${YELLOW}✗ This PR has merge conflicts${RESET}"
     echo ""
-    read -r -p "  Open in browser to resolve? [y/N] " answer </dev/tty
-    if [[ "$answer" =~ ^[Yy]$ ]]; then
+    read -r -p "  Open in browser to resolve? [Y/n] " answer </dev/tty
+    if [[ ! "$answer" =~ ^[Nn]$ ]]; then
       gh pr view "$url" --web
     fi
   else

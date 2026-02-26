@@ -189,7 +189,7 @@ handle_merge() {
     read -r -p "  Merge this PR? [Y/n] " answer </dev/tty
     if [[ ! "$answer" =~ ^[Nn]$ ]]; then
       echo ""
-      gh pr merge "$url" || {
+      gh pr merge --delete-branch "$url" || {
         echo -e "  ${YELLOW}Merge failed. Open in browser to resolve.${RESET}" >&2
         return 1
       }

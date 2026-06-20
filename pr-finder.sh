@@ -4,9 +4,10 @@ set -euo pipefail
 LIMIT="${PR_FINDER_LIMIT:-100}"
 OWNER=""
 INTERACTIVE_OPT=""  # "", "force", or "off"
+MERGE_ALL_CLEAN=false
 
 usage() {
-  echo "Usage: $(basename "$0") [--owner <user-or-org>] [-i | --no-interactive]"
+  echo "Usage: $(basename "$0") [--owner <user-or-org>] [-i | --no-interactive] [--merge-all-clean]"
   echo ""
   echo "Show open pull requests across your GitHub contexts."
   echo ""
@@ -14,6 +15,8 @@ usage() {
   echo "  --owner <name>       Filter to PRs in repos owned by a user or organization"
   echo "  -i, --interactive    Force interactive mode (requires fzf)"
   echo "  --no-interactive     Force non-interactive text output"
+  echo "  --merge-all-clean    Automatically merge every PR with a CLEAN merge state"
+  echo "                       (mergeable, all checks passing) without prompting"
   echo "  -h, --help           Show this help message"
   exit 0
 }
@@ -24,6 +27,7 @@ while [[ $# -gt 0 ]]; do
     --owner)   OWNER="${2:?--owner requires a value}"; shift 2 ;;
     -i|--interactive) INTERACTIVE_OPT="force"; shift ;;
     --no-interactive) INTERACTIVE_OPT="off"; shift ;;
+    --merge-all-clean) MERGE_ALL_CLEAN=true; shift ;;
     -h|--help) usage ;;
     *) echo "Unknown option: $1" >&2; exit 1 ;;
   esac
@@ -189,7 +193,7 @@ handle_merge() {
     read -r -p "  Merge this PR? [Y/n] " answer </dev/tty
     if [[ ! "$answer" =~ ^[Nn]$ ]]; then
       echo ""
-      gh pr merge --delete-branch "$url" || {
+      gh pr merge --squash --delete-branch "$url" || {
         echo -e "  ${YELLOW}Merge failed. Open in browser to resolve.${RESET}" >&2
         return 1
       }
@@ -312,7 +316,58 @@ print_section() {
   echo "$count"
 }
 
-if $INTERACTIVE; then
+merge_all_clean() {
+  # Collect every unique PR URL across all sections
+  local all_urls
+  all_urls=$(echo "$authored_json" "$review_json" "$assigned_json" "$repo_prs" \
+    | jq -rs 'add | map(.url) | unique | .[]')
+
+  if [[ -z "$all_urls" ]]; then
+    echo -e "${DIM}No open PRs found.${RESET}"
+    return
+  fi
+
+  local merged=0 skipped=0 failed=0
+  while IFS= read -r url; do
+    [[ -z "$url" ]] && continue
+
+    local pr_info merge_state title number
+    pr_info=$(gh pr view "$url" --json mergeStateStatus,title,number 2>/dev/null) || {
+      echo -e "  ${YELLOW}✗ Could not fetch ${url}${RESET}" >&2
+      failed=$((failed + 1))
+      continue
+    }
+    merge_state=$(echo "$pr_info" | jq -r '.mergeStateStatus')
+    title=$(echo "$pr_info" | jq -r '.title')
+    number=$(echo "$pr_info" | jq -r '.number')
+
+    if [[ "$merge_state" == "CLEAN" ]]; then
+      if gh pr merge --squash --delete-branch "$url" 2>/dev/null; then
+        echo -e "  ${GREEN}✓ Merged #${number}${RESET} ${title}"
+        merged=$((merged + 1))
+      else
+        echo -e "  ${YELLOW}✗ Merge failed #${number}${RESET} ${title} ${DIM}${url}${RESET}" >&2
+        failed=$((failed + 1))
+      fi
+    else
+      echo -e "  ${DIM}⋯ Skipped #${number} (${merge_state}) ${title}${RESET}"
+      skipped=$((skipped + 1))
+    fi
+  done <<< "$all_urls"
+
+  echo -e "${DIM}─────────────────────────────────${RESET}"
+  echo -e "${BOLD}Merged: ${merged} · Skipped: ${skipped} · Failed: ${failed}${RESET}"
+}
+
+if $MERGE_ALL_CLEAN; then
+  if [[ -n "$OWNER" ]]; then
+    echo -e "${BOLD}PR Finder${RESET} — merging CLEAN PRs for ${CYAN}${ME}${RESET} in ${MAGENTA}${OWNER}${RESET}"
+  else
+    echo -e "${BOLD}PR Finder${RESET} — merging CLEAN PRs for ${CYAN}${ME}${RESET}"
+  fi
+  echo ""
+  merge_all_clean
+elif $INTERACTIVE; then
   run_interactive
 else
   if [[ -n "$OWNER" ]]; then

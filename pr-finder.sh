@@ -331,7 +331,7 @@ merge_all_clean() {
   while IFS= read -r url; do
     [[ -z "$url" ]] && continue
 
-    local pr_info merge_state title number
+    local pr_info merge_state title number repo
     pr_info=$(gh pr view "$url" --json mergeStateStatus,title,number 2>/dev/null) || {
       echo -e "  ${YELLOW}✗ Could not fetch ${url}${RESET}" >&2
       failed=$((failed + 1))
@@ -340,17 +340,19 @@ merge_all_clean() {
     merge_state=$(echo "$pr_info" | jq -r '.mergeStateStatus')
     title=$(echo "$pr_info" | jq -r '.title')
     number=$(echo "$pr_info" | jq -r '.number')
+    # Derive owner/repo from the PR URL (https://github.com/owner/repo/pull/N)
+    repo=$(echo "$url" | sed -E 's#https?://[^/]+/([^/]+/[^/]+)/pull/.*#\1#')
 
     if [[ "$merge_state" == "CLEAN" ]]; then
       if gh pr merge --squash --delete-branch "$url" 2>/dev/null; then
-        echo -e "  ${GREEN}✓ Merged #${number}${RESET} ${title}"
+        echo -e "  ${GREEN}✓ Merged ${repo} #${number}${RESET} ${title}"
         merged=$((merged + 1))
       else
-        echo -e "  ${YELLOW}✗ Merge failed #${number}${RESET} ${title} ${DIM}${url}${RESET}" >&2
+        echo -e "  ${YELLOW}✗ Merge failed ${repo} #${number}${RESET} ${title} ${DIM}${url}${RESET}" >&2
         failed=$((failed + 1))
       fi
     else
-      echo -e "  ${DIM}⋯ Skipped #${number} (${merge_state}) ${title}${RESET}"
+      echo -e "  ${DIM}⋯ Skipped ${repo} #${number} (${merge_state}) ${title}${RESET}"
       skipped=$((skipped + 1))
     fi
   done <<< "$all_urls"

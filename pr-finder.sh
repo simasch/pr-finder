@@ -18,6 +18,22 @@ usage() {
   echo "  --merge-all-clean    Automatically merge every PR with a CLEAN merge state"
   echo "                       (mergeable, all checks passing) without prompting"
   echo "  -h, --help           Show this help message"
+  echo ""
+  echo "PR categories shown:"
+  echo "  Authored by you, Review requested, Assigned to you, and open PRs in"
+  echo "  repositories you can push to (owner, collaborator, org member)."
+  echo ""
+  echo "Environment:"
+  echo "  PR_FINDER_LIMIT      Max PRs fetched per category (default: 100)"
+  echo ""
+  echo "Examples:"
+  echo "  $(basename "$0")                      Show all your open PRs"
+  echo "  $(basename "$0") --owner acme         Only PRs in repos owned by 'acme'"
+  echo "  $(basename "$0") -i                   Force interactive fzf picker"
+  echo "  $(basename "$0") --merge-all-clean    Merge every CLEAN PR without prompting"
+  echo "  PR_FINDER_LIMIT=200 $(basename "$0")  Fetch up to 200 PRs per category"
+  echo ""
+  echo "Requires: gh, jq (and fzf for interactive mode)."
   exit 0
 }
 
